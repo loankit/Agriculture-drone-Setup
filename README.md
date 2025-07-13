@@ -1,2 +1,2 @@
 # Agriculture-drone-Setup
-So this is this drone setup for flying drone autonously and the mannual giving way point and geofancing
+So this is this drone setup Before the drone flying like callibration and the fly UAV autonomously and the mannualy giving way point and also creat geofancing.
