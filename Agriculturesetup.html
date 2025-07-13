@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgriDrone Control Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --secondary: #8BC34A;
+            --accent: #FFC107;
+            --dark: #2E7D32;
+            --light: #F1F8E9;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+        }
+        
+        .header {
+            grid-column: 1 / 3;
+            background-color: var(--dark);
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar {
+            background-color: white;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .panel {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .map-container {
+            height: 400px;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .sensor-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .progress-container {
+            height: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary);
+            border-radius: 5px;
+        }
+        
+        .flight-mode-btn {
+            padding: 8px 15px;
+            border-radius: 20px;
+            background-color: #e0e0e0;
+            border: none;
+            margin: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .flight-mode-btn.active {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .tab.active {
+            border-bottom: 2px solid var(--primary);
+            color: var(--primary);
+            font-weight: bold;
+        }
+        
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .motor-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 10px;
+        }
+        
+        .motor-slider {
+            width: 150px;
+            height: 300px;
+            -webkit-appearance: slider-vertical;
+            writing-mode: bt-lr;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-connected {
+            background-color: #4CAF50;
+        }
+        
+        .status-disconnected {
+            background-color: #F44336;
+        }
+        
+        .calibration-progress {
+            width: 100%;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        
+        .waypoint-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        
+        .waypoint-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .console-output {
+            height: 200px;
+            overflow-y: auto;
+            background-color: #212121;
+            color: #f5f5f5;
+            font-family: monospace;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .console-line {
+            margin: 2px 0;
+        }
+        
+        .parameter-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .parameter-table th, .parameter-table td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+        
+        .parameter-table th {
+            background-color: #f5f5f5;
+        }
+        
+        .parameter-input {
+            width: 100%;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .emergency-btn {
+            background-color: #F44336;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .emergency-btn:hover {
+            background-color: #D32F2F;
+        }
+        
+        .fuel-gauge {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .fuel-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.5s;
+        }
+        
+        .fuel-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #333;
+            font-weight: bold;
+        }
+        
+        /* Animation for radar */
+        @keyframes radar-sweep {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .radar-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto;
+        }
+        
+        .radar-dish {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: rgba(0, 100, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .radar-sweep {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent 50%, rgba(0, 255, 0, 0.3));
+            animation: radar-sweep 4s linear infinite;
+            transform-origin: center;
+            border-radius: 50%;
+        }
+        
+        .radar-grid {
+            position: absolute;
+            width: 80%;
+            height: 80%;
+            top: 10%;
+            left: 10%;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 255, 0, 0.5);
+        }
+        
+        .radar-grid:nth-child(2) {
+            width: 60%;
+            height: 60%;
+            top: 20%;
+            left: 20%;
+        }
+        
+        .radar-grid:nth-child(3) {
+            width: 40%;
+            height: 40%;
+            top: 30%;
+            left: 30%;
+        }
+        
+        .radar-grid:nth-child(4) {
+            width: 20%;
+            height: 20%;
+            top: 40%;
+            left: 40%;
+        }
+        
+        .radar-center {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            background-color: rgba(0, 255, 0, 1);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .radar-object {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: rgba(0, 255, 0, 1);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        /* Flow meter animation */
+        @keyframes flow-animation {
+            0% { transform: scaleY(1); }
+            50% { transform: scaleY(1.2); }
+            100% { transform: scaleY(1); }
+        }
+        
+        .flow-indicator {
+            width: 20px;
+            height: 100px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            margin: 0 auto;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .flow-fill {
+            width: 100%;
+            height: 50%;
+            background-color: #2196F3;
+            position: absolute;
+            bottom: 0;
+            animation: flow-animation 2s infinite;
+        }
+        
+        /* Battery indicator */
+        .battery-container {
+            width: 60px;
+            height: 30px;
+            border: 2px solid #333;
+            border-radius: 4px;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .battery-level {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.5s;
+        }
+        
+        .battery-tip {
+            width: 5px;
+            height: 12px;
+            background-color: #333;
+            position: absolute;
+            right: -7px;
+            top: 7px;
+            border-radius: 0 2px 2px 0;
+        }
+        
+        /* Motor status indicators */
+        .motor-status {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        
+        .motor-active {
+            background-color: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+        
+        .motor-inactive {
+            background-color: #F44336;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1 class="text-xl font-bold">AgriDrone Control Suite</h1>
+            <div class="ml-auto flex items-center">
+                <span id="datetime" class="mr-4"></span>
+                <div class="connection-status">
+                    <span class="status-indicator status-disconnected" id="connection-status"></span>
+                    <span id="connection-text">Disconnected</span>
+                </div>
+                <button id="connect-btn" class="ml-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Connect</button>
+                <button id="emergency-btn" class="ml-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700" disabled>EMERGENCY STOP</button>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="panel mb-4">
+                <h2 class="font-bold text-lg mb-2">Navigation</h2>
+                <div class="flex flex-col space-y-2">
+                    <button class="tab active" data-tab="dashboard">Dashboard</button>
+                    <button class="tab" data-tab="flight-plan">Flight Plan</button>
+                    <button class="tab" data-tab="calibration">Calibration</button>
+                    <button class="tab" data-tab="parameters">Parameters</button>
+                    <button class="tab" data-tab="telemetry">Telemetry</button>
+                    <button class="tab" data-tab="manual-control">Manual Control</button>
+                    <button class="tab" data-tab="diagnostics">Diagnostics</button>
+                </div>
+            </div>
+            
+            <div class="panel mb-4">
+                <h2 class="font-bold text-lg mb-2">System Status</h2>
+                <div class="space-y-3">
+                    <div>
+                        <div class="flex justify-between">
+                            <span>Battery:</span>
+                            <span id="battery-percent">--%</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="battery-container">
+                                <div class="battery-level" id="battery-level" style="width: 0%"></div>
+                                <div class="battery-tip"></div>
+                            </div>
+                            <div id="battery-voltage" class="ml-2">--V</div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between">
+                            <span>Fuel:</span>
+                            <span id="fuel-percent">--%</span>
+                        </div>
+                        <div class="fuel-gauge">
+                            <div class="fuel-fill" id="fuel-fill" style="width: 0%"></div>
+                            <div class="fuel-label" id="fuel-label">-- L</div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between">
+                            <span>Spray Rate:</span>
+                            <span id="spray-rate">-- L/min</span>
+                        </div>
+                        <div class="flow-indicator">
+                            <div class="flow-fill" id="flow-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2 class="font-bold text-lg mb-2">Flight Mode</h2>
+                <div class="flex flex-wrap">
+                    <button class="flight-mode-btn" data-mode="manual">Manual</button>
+                    <button class="flight-mode-btn" data-mode="altctl">Altitude</button>
+                    <button class="flight-mode-btn active" data-mode="loiter">Loiter</button>
+                    <button class="flight-mode-btn" data-mode="mission">Mission</button>
+                    <button class="flight-mode-btn" data-mode="rtl">RTL</button>
+                    <button class="flight-mode-btn" data-mode="land">Land</button>
+                </div>
+                <div id="flight-mode-status" class="mt-2 text-center font-bold text-green-700">LOITER</div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <!-- Dashboard Tab -->
+            <div id="dashboard-tab" class="tab-content active">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Map View</h2>
+                        <div class="map-container">
+                            <img src="https://placehold.co/800x400" alt="Live agricultural field map showing drone position and flight path with field boundaries" />
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Radar View</h2>
+                        <div class="radar-container">
+                            <div class="radar-dish">
+                                <div class="radar-sweep"></div>
+                                <div class="radar-grid"></div>
+                                <div class="radar-grid"></div>
+                                <div class="radar-grid"></div>
+                                <div class="radar-grid"></div>
+                                <div class="radar-center"></div>
+                                <!-- Radar objects will be added dynamically -->
+                            </div>
+                        </div>
+                        <div class="mt-2 text-center" id="radar-status">No obstacles detected</div>
+                    </div>
+                    
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Flight Status</h2>
+                        <div class="telemetry-grid">
+                            <div>
+                                <div class="text-sm text-gray-500">Altitude</div>
+                                <div class="sensor-value" id="altitude-value">-- m</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Speed</div>
+                                <div class="sensor-value" id="speed-value">-- m/s</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Heading</div>
+                                <div class="sensor-value" id="heading-value">-- °</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">GPS</div>
+                                <div class="sensor-value" id="gps-value">-- sats</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Throttle</div>
+                                <div class="sensor-value" id="throttle-value">-- %</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Distance</div>
+                                <div class="sensor-value" id="distance-value">-- km</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Flight Time</div>
+                                <div class="sensor-value" id="flight-time">--:--:--</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Next WP</div>
+                                <div class="sensor-value" id="next-wp">--/--</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Motor Status</h2>
+                        <div class="flex justify-around">
+                            <div class="motor-control">
+                                <div class="motor-status motor-active" id="motor-1-status"></div>
+                                <label>Motor 1</label>
+                                <input type="range" min="0" max="100" value="0" class="motor-slider" id="motor-1-slider">
+                            </div>
+                            <div class="motor-control">
+                                <div class="motor-status motor-inactive" id="motor-2-status"></div>
+                                <label>Motor 2</label>
+                                <input type="range" min="0" max="100" value="0" class="motor-slider" id="motor-2-slider">
+                            </div>
+                            <div class="motor-control">
+                                <div class="motor-status motor-inactive" id="motor-3-status"></div>
+                                <label>Motor 3</label>
+                                <input type="range" min="0" max="100" value="0" class="motor-slider" id="motor-3-slider">
+                            </div>
+                            <div class="motor-control">
+                                <div class="motor-status motor-inactive" id="motor-4-status"></div>
+                                <label>Motor 4</label>
+                                <input type="range" min="0" max="100" value="0" class="motor-slider" id="motor-4-slider">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="panel lg:col-span-2">
+                        <h2 class="font-bold text-lg mb-2">System Console</h2>
+                        <div class="console-output" id="console-output">
+                            <div class="console-line">System initialized</div>
+                            <div class="console-line">Waiting for connection...</div>
+                        </div>
+                        <div class="mt-2 flex">
+                            <input type="text" class="flex-grow p-2 border rounded" id="console-input" placeholder="Enter command...">
+                            <button class="ml-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700" id="console-send-btn">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Flight Plan Tab -->
+            <div id="flight-plan-tab" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="panel lg:col-span-2">
+                        <h2 class="font-bold text-lg mb-2">Mission Planning Map</h2>
+                        <div class="map-container">
+                            <img src="https://placehold.co/800x500" alt="Agricultural field mapping interface with waypoint markers and area grid overlay" />
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Mission Control</h2>
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Upload Mission</button>
+                            <button class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Download Mission</button>
+                            <button class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700">Clear Mission</button>
+                            <button class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">Set Home</button>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block mb-1">Mission Name</label>
+                            <input type="text" class="w-full p-2 border rounded" placeholder="Enter mission name">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block mb-1">Spray Parameters</label>
+                            <div class="flex space-x-2">
+                                <div class="flex-grow">
+                                    <label class="block text-sm">Rate (L/ha)</label>
+                                    <input type="number" class="w-full p-1 border rounded" value="20">
+                                </div>
+                                <div class="flex-grow">
+                                    <label class="block text-sm">Altitude (m)</label>
+                                    <input type="number" class="w-full p-1 border rounded" value="5">
+                                </div>
+                                <div class="flex-grow">
+                                    <label class="block text-sm">Speed (m/s)</label>
+                                    <input type="number" class="w-full p-1 border rounded" value="4">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block mb-1">Waypoints</label>
+                            <div class="waypoint-list" id="waypoint-list">
+                                <!-- Waypoints will be added dynamically -->
+                            </div>
+                            <div class="flex space-x-2 mt-2">
+                                <button class="flex-grow px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Add Waypoint</button>
+                                <button class="flex-grow px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Remove Selected</button>
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            <button class="flex-grow px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save Mission</button>
+                            <button class="flex-grow px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">Load Mission</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Calibration Tab -->
+            <div id="calibration-tab" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Sensor Calibration</h2>
+                        <div class="space-y-4">
+                            <div class="calibration-step">
+                                <h3 class="font-bold mb-2">Accelerometer Calibration</h3>
+                                <p class="text-sm text-gray-600 mb-2">Place the drone on a level surface and click start.</p>
+                                <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Start</button>
+                                <div class="calibration-progress" id="accel-progress">
+                                    <div class="flex justify-between mb-1">
+                                        <span>Status:</span>
+                                        <span>Not Started</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="calibration-step">
+                                <h3 class="font-bold mb-2">Compass Calibration</h3>
+                                <p class="text-sm text-gray-600 mb-2">Rotate the drone slowly around all axes until complete.</p>
+                                <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Start</button>
+                                <div class="calibration-progress" id="compass-progress">
+                                    <div class="flex justify-between mb-1">
+                                        <span>Status:</span>
+                                        <span>Not Started</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="calibration-step">
+                                <h3 class="font-bold mb-2">Radio Calibration</h3>
+                                <p class="text-sm text-gray-600 mb-2">Move sticks to their extremes and center positions.</p>
+                                <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Start</button>
+                                <div class="calibration-progress" id="radio-progress">
+                                    <div class="flex justify-between mb-1">
+                                        <span>Status:</span>
+                                        <span>Not Started</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="calibration-step">
+                                <h3 class="font-bold mb-2">ESC Calibration</h3>
+                                <p class="text-sm text-gray-600 mb-2">Disconnect props! This will set max throttle values.</p>
+                                <button class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Start</button>
+                                <div class="calibration-progress" id="esc-progress">
+                                    <div class="flex justify-between mb-1">
+                                        <span>Status:</span>
+                                        <span>Not Started</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Flow Meter Calibration</h2>
+                        <div class="space-y-4">
+                            <div class="calibration-step">
+                                <h3 class="font-bold mb-2">Zero Calibration</h3>
+                                <p class="text-sm text-gray-600 mb-2">Stop all liquid flow and click start.</p>
+                                <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Start</button>
+                                <div class="calibration-progress" id="flow-zero-progress">
+                                    <div class="flex justify-between mb-1">
+                                        <span>Status:</span>
+                                        <span>Not Started</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="calibration-step">
+                                <h3 class="font-bold mb-2">Full Scale Calibration</h3>
+                                <p class="text-sm text-gray-600 mb-2">Run pump at maximum flow rate.</p>
+                                <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Start</button>
+                                <div class="calibration-progress" id="flow-full-progress">
+                                    <div class="flex justify-between mb-1">
+                                        <span>Status:</span>
+                                        <span>Not Started</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <h2 class="font-bold text-lg mb-2 mt-4">Radar Calibration</h2>
+                        <div class="space-y-4">
+                            <div class="calibration-step">
+                                <h3 class="font-bold mb-2">Distance Calibration</h3>
+                                <p class="text-sm text-gray-600 mb-2">Place known objects at measured distances.</p>
+                                <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Start</button>
+                                <div class="calibration-progress" id="radar-calibration-progress">
+                                    <div class="flex justify-between mb-1">
+                                        <span>Status:</span>
+                                        <span>Not Started</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <h2 class="font-bold text-lg mb-2 mt-4">Spray Parameters</h2>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <label class="flex-grow">Spray Nozzle Size:</label>
+                                <select class="p-2 border rounded">
+                                    <option>Fine (0.3mm)</option>
+                                    <option selected>Medium (0.5mm)</option>
+                                    <option>Coarse (0.8mm)</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex-grow">Spray Pattern:</label>
+                                <select class="p-2 border rounded">
+                                    <option selected>Cone</option>
+                                    <option>Flat Fan</option>
+                                    <option>Hollow Cone</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex-grow">Spray Angle (°):</label>
+                                <input type="number" class="p-2 border rounded" value="30">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex-grow">Minimum Pressure (kPa):</label>
+                                <input type="number" class="p-2 border rounded" value="100">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex-grow">Maximum Pressure (kPa):</label>
+                                <input type="number" class="p-2 border rounded" value="300">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Parameters Tab -->
+            <div id="parameters-tab" class="tab-content hidden">
+                <div class="panel">
+                    <h2 class="font-bold text-lg mb-2">Flight Controller Parameters</h2>
+                    <div class="flex mb-4">
+                        <input type="text" class="flex-grow p-2 border rounded" placeholder="Search parameters...">
+                        <button class="ml-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Search</button>
+                        <button class="ml-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Refresh All</button>
+                        <button class="ml-2 px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700">Reset to Default</button>
+                        <button class="ml-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">Save</button>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="parameter-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Value</th>
+                                    <th>Default</th>
+                                    <th>Min</th>
+                                    <th>Max</th>
+                                    <th>Units</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>PITCH_P</td>
+                                    <td><input type="text" class="parameter-input" value="0.120"></td>
+                                    <td>0.100</td>
+                                    <td>0.010</td>
+                                    <td>0.500</td>
+                                    <td></td>
+                                    <td>Pitch axis P gain</td>
+                                </tr>
+                                <tr>
+                                    <td>PITCH_I</td>
+                                    <td><input type="text" class="parameter-input" value="0.080"></td>
+                                    <td>0.050</td>
+                                    <td>0.001</td>
+                                    <td>0.200</td>
+                                    <td></td>
+                                    <td>Pitch axis I gain</td>
+                                </tr>
+                                <tr>
+                                    <td>PITCH_D</td>
+                                    <td><input type="text" class="parameter-input" value="0.012"></td>
+                                    <td>0.010</td>
+                                    <td>0.000</td>
+                                    <td>0.050</td>
+                                    <td></td>
+                                    <td>Pitch axis D gain</td>
+                                </tr>
+                                <tr>
+                                    <td>ROLL_P</td>
+                                    <td><input type="text" class="parameter-input" value="0.120"></td>
+                                    <td>0.100</td>
+                                    <td>0.010</td>
+                                    <td>0.500</td>
+                                    <td></td>
+                                    <td>Roll axis P gain</td>
+                                </tr>
+                                <tr>
+                                    <td>ROLL_I</td>
+                                    <td><input type="text" class="parameter-input" value="0.080"></td>
+                                    <td>0.050</td>
+                                    <td>0.001</td>
+                                    <td>0.200</td>
+                                    <td></td>
+                                    <td>Roll axis I gain</td>
+                                </tr>
+                                <tr>
+                                    <td>ROLL_D</td>
+                                    <td><input type="text" class="parameter-input" value="0.012"></td>
+                                    <td>0.010</td>
+                                    <td>0.000</td>
+                                    <td>0.050</td>
+                                    <td></td>
+                                    <td>Roll axis D gain</td>
+                                </tr>
+                                <tr>
+                                    <td>YAW_P</td>
+                                    <td><input type="text" class="parameter-input" value="0.150"></td>
+                                    <td>0.120</td>
+                                    <td>0.010</td>
+                                    <td>0.500</td>
+                                    <td></td>
+                                    <td>Yaw axis P gain</td>
+                                </tr>
+                                <tr>
+                                    <td>YAW_I</td>
+                                    <td><input type="text" class="parameter-input" value="0.050"></td>
+                                    <td>0.030</td>
+                                    <td>0.001</td>
+                                    <td>0.100</td>
+                                    <td></td>
+                                    <td>Yaw axis I gain</td>
+                                </tr>
+                                <tr>
+                                    <td>WPNAV_SPEED</td>
+                                    <td><input type="text" class="parameter-input" value="1000"></td>
+                                    <td>500</td>
+                                    <td>100</td>
+                                    <td>2000</td>
+                                    <td>cm/s</td>
+                                    <td>Waypoint navigation speed</td>
+                                </tr>
+                                <tr>
+                                    <td>LAND_SPEED</td>
+                                    <td><input type="text" class="parameter-input" value="100"></td>
+                                    <td>100</td>
+                                    <td>50</td>
+                                    <td>200</td>
+                                    <td>cm/s</td>
+                                    <td>Landing speed</td>
+                                </tr>
+                                <tr>
+                                    <td>FS_BATT_ENABLE</td>
+                                    <td><input type="text" class="parameter-input" value="1"></td>
+                                    <td>0</td>
+                                    <td>0</td>
+                                    <td>1</td>
+                                    <td></td>
+                                    <td>Enable battery failsafe</td>
+                                </tr>
+                                <tr>
+                                    <td>FS_BATT_VOLTAGE</td>
+                                    <td><input type="text" class="parameter-input" value="14.0"></td>
+                                    <td>14.0</td>
+                                    <td>10.0</td>
+                                    <td>16.8</td>
+                                    <td>V</td>
+                                    <td>Battery failsafe voltage</td>
+                                </tr>
+                                <tr>
+                                    <td>FS_BATT_MAH</td>
+                                    <td><input type="text" class="parameter-input" value="3000"></td>
+                                    <td>4000</td>
+                                    <td>1000</td>
+                                    <td>10000</td>
+                                    <td>mAh</td>
+                                    <td>Battery failsafe capacity</td>
+                                </tr>
+                                <tr>
+                                    <td>FS_GCS_ENABLE</td>
+                                    <td><input type="text" class="parameter-input" value="1"></td>
+                                    <td>1</td>
+                                    <td>0</td>
+                                    <td>1</td>
+                                    <td></td>
+                                    <td>Enable GCS failsafe</td>
+                                </tr>
+                                <tr>
+                                    <td>FLOW_ENABLE</td>
+                                    <td><input type="text" class="parameter-input" value="1"></td>
+                                    <td>1</td>
+                                    <td>0</td>
+                                    <td>1</td>
+                                    <td></td>
+                                    <td>Enable optical flow sensor</td>
+                                </tr>
+                                <tr>
+                                    <td>FLOW_FXSCALER</td>
+                                    <td><input type="text" class="parameter-input" value="1.000"></td>
+                                    <td>1.000</td>
+                                    <td>0.500</td>
+                                    <td>2.000</td>
+                                    <td></td>
+                                    <td>Flow X scaling factor</td>
+                                </tr>
+                                <tr>
+                                    <td>FLOW_FYSCALER</td>
+                                    <td><input type="text" class="parameter-input" value="1.000"></td>
+                                    <td>1.000</td>
+                                    <td>0.500</td>
+                                    <td>2.000</td>
+                                    <td></td>
+                                    <td>Flow Y scaling factor</td>
+                                </tr>
+                                <tr>
+                                    <td>FLOW_ORIENT</td>
+                                    <td><input type="text" class="parameter-input" value="0"></td>
+                                    <td>0</td>
+                                    <td>0</td>
+                                    <td>7</td>
+                                    <td></td>
+                                    <td>Flow sensor orientation</td>
+                                </tr>
+                                <tr>
+                                    <td>SPRAY_ENABLE</td>
+                                    <td><input type="text" class="parameter-input" value="1"></td>
+                                    <td>1</td>
+                                    <td>0</td>
+                                    <td>1</td>
+                                    <td></td>
+                                    <td>Enable spraying system</td>
+                                </tr>
+                                <tr>
+                                    <td>SPRAY_RATE</td>
+                                    <td><input type="text" class="parameter-input" value="500"></td>
+                                    <td>500</td>
+                                    <td>100</td>
+                                    <td>2000</td>
+                                    <td>ml/min</td>
+                                    <td>Default spray rate</td>
+                                </tr>
+                                <tr>
+                                    <td>SPRAY_PRESSURE</td>
+                                    <td><input type="text" class="parameter-input" value="200"></td>
+                                    <td>200</td>
+                                    <td>50</td>
+                                    <td>500</td>
+                                    <td>kPa</td>
+                                    <td>Spray pressure</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Telemetry Tab -->
+            <div id="telemetry-tab" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Live Telemetry</h2>
+                        <div class="telemetry-grid">
+                            <div>
+                                <div class="text-sm text-gray-500">Latitude</div>
+                                <div class="sensor-value" id="latitude-value">--.------°</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Longitude</div>
+                                <div class="sensor-value" id="longitude-value">--.------°</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">GPS Altitude</div>
+                                <div class="sensor-value" id="gps-altitude-value">-- m</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Relative Altitude</div>
+                                <div class="sensor-value" id="relative-altitude-value">-- m</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Ground Speed</div>
+                                <div class="sensor-value" id="ground-speed-value">-- m/s</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Climb Rate</div>
+                                <div class="sensor-value" id="climb-rate-value">-- m/s</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Heading</div>
+                                <div class="sensor-value" id="telemetry-heading-value">-- °</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Number of Sats</div>
+                                <div class="sensor-value" id="number-sats-value">--</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">HDOP</div>
+                                <div class="sensor-value" id="hdop-value">--</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">System Status</div>
+                                <div class="sensor-value" id="system-status-value">--</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Flight Mode</div>
+                                <div class="sensor-value" id="telemetry-mode-value">--</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Flight Time</div>
+                                <div class="sensor-value" id="telemetry-flight-time-value">-- s</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <h2 class="font-bold text-lg mb-2">Graphs</h2>
+                        <div class="h-60 bg-gray-100 rounded flex items-center justify-center">
+                            <p class="text-gray-500">Telemetry graphs will be displayed here</p>
+                        </div>
+                        <div class="mt-4">
+                            <select class="p-2 border rounded">
+                                <option>Altitude</option>
+                                <option>Speed</option>
+                                <option>Battery Voltage</option>
+                                <option>Motor Output</option>
+                                <option selected>Flow Rate</option>
+                                <option>Pressure</option>
+                                <option>GPS Accuracy</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="panel lg:col-span-2">
+                        <h2 class="font-bold text-lg mb-2">Message Log</h2>
+                        <div class="console-output" id="message-log">
+                            <div class="console-line">System initialized</div>
+                            <div class="console-line">Waiting for telemetry data...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Manual Control Tab -->
+            <div id="manual-control-tab" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="panel lg:col-span-2">
+                        <h2 class="font-bold text-lg mb-2">Virtual RC Transmitter</h2>
+                        <div class="flex justify-center">
+                            <div class="bg-gray-200 p-4 rounded-lg shadow-inner">
+                                <div class="relative w-64 h-64 bg-gray-300 rounded-lg">
+                                    <!-- Right stick -->
+                                    <div class="absolute w-8 h-8 bg-red-500 rounded-full cursor-pointer" id="right-stick" style="top: 50%; left: 75%; transform: translate(-50%, -50%)"></div>
+                                    <!-- Left stick -->
+                                    <div class="absolute w-8 h-8 bg-blue-500 rounded-full cursor-pointer" id="left-stick" style="top: 50%; left: 25%; transform: translate(-50%, -50%)"></div>
+                                    <!-- Mode switch -->
+                                    <div class="absolute top-4 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-400 rounded-full">
+                                        <div class="absolute w-10 h-6 bg-green-500 rounded-full cursor-pointer" id="mode-switch" style="left: 10px"></div>
+                                    </div>
+                                    <!-- Aux switches -->
+                                    <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-8">
+                                        <div class="w-6 h-12 bg-gray-400 rounded-full">
+                                            <div class="w-6 h-6 bg-yellow-500 rounded-full cursor-pointer" id="aux1-switch"></div>
+                                        </div>
+                                        <div class="w-6 h-12 bg-gray-400 rounded-full">
+                                            <div class="w-6 h-6 bg-yellow-500 rounded-full cursor-pointer" id="aux2-switch"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 grid grid-cols-4 gap-2">
+                            <div>
+                                <label class="block text-sm">Throttle</label>
+                                <input type="range" min="0" max="100" value="0" id="throttle-slider">
+                            </div>
+                            <div>
+                                <label class="block text-sm">Roll</label>
+                                <input type="range" min="-100" max="100" value="0" id="roll-slider">
+                            </div>
+                            <div>
+                                <label class="block text-sm">Pitch</label>
+                                <input type="range" min="-100" max="100" value="0" id="pitch-slider">
+                            </div>
+                            <div>
+                                <label class="block text-sm">Yaw</label>
+                                <input type="range" min="-100" max="100" value="0" id="yaw-slider">
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 flex space-x-4">
+                            <div class="panel flex-1">
+                                <h3 class="font-bold mb-2">Channel Outputs</h3>
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <label class="w-24">Throttle:</label>
+                                        <input type="text" class="w-16 text-right border rounded p-1" id="ch1-value" value="1000" readonly>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <label class="w-24">Roll:</label>
+                                        <input type="text" class="w-16 text-right border rounded p-1" id="ch2-value" value="1500" readonly>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <label class="w-24">Pitch:</label>
+                                        <input type="text" class="w-16 text-right border rounded p-1" id="ch3-value" value="1500" readonly>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <label class="w-24">Yaw:</label>
+                                        <input type="text" class="w-16 text-right border rounded p-1" id="ch4-value" value="1500" readonly>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <label class="w-24">Mode:</label>
+                                        <input type="text" class="w-16 text-right border rounded p-1" id="ch5-value" value="1000" readonly>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <label class="
