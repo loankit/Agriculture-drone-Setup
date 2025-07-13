@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Pixhawk Mission Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map { height: 600px; }
+        .waypoint-item:hover { background-color: #f0f9ff; }
+        .mission-item:hover { background-color: #f0f9ff; }
+        .draggable-waypoint { cursor: move; }
+        .sidebar { transition: all 0.3s ease; }
+        @media (max-width: 768px) {
+            .sidebar { width: 100% !important; }
+            #map { height: 400px; }
+        }
+        .progress-bar {
+            height: 4px;
+            background-color: #3b82f6;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-blue-600 text-white p-4 shadow-md">
+            <div class="container mx-auto flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                    <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/7b87b600-bbd3-4464-92d6-96217ac29570.png" alt="Pixhawk logo with drone silhouette in white against blue background" class="h-10 w-10 rounded-full" />
+                    <h1 class="text-2xl font-bold">Advanced Pixhawk Mission Planner</h1>
+                </div>
+                <div class="flex space-x-4 items-center">
+                    <button id="connect-drone" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded-md font-medium transition">
+                        Connect to Drone
+                    </button>
+                    <button id="user-profile" class="bg-blue-500 hover:bg-blue-700 px-4 py-2 rounded-md font-medium transition">
+                        User Profile
+                    </button>
+                </div>
+            </div>
+            <div id="connection-status" class="hidden container mx-auto mt-2">
+                <div class="flex items-center">
+                    <span id="status-indicator" class="h-3 w-3 rounded-full bg-gray-500 mr-2"></span>
+                    <span id="status-text" class="text-sm">Disconnected</span>
+                </div>
+                <div class="progress-bar mt-1 w-0"></div>
+            </div>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Sidebar -->
+            <div class="sidebar w-80 bg-white border-r border-gray-200 flex flex-col h-full">
+                <!-- Mission List -->
+                <div class="p-4 border-b border-gray-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold">Mission Plans</h2>
+                        <button id="new-mission" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-md text-sm">
+                            New Mission
+                        </button>
+                    </div>
+                    <div class="space-y-2 max-h-60 overflow-y-auto" id="mission-list">
+                        <!-- Mission items will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Waypoints -->
+                <div class="p-4 border-b border-gray-200 flex-1 overflow-y-auto">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold">Waypoints</h2>
+                        <button id="add-waypoint" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-sm">
+                            Add Waypoint
+                        </button>
+                    </div>
+                    <div class="space-y-2" id="waypoint-list">
+                        <!-- Waypoint items will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Mission Actions -->
+                <div class="p-4 border-t border-gray-200">
+                    <button id="save-mission" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md mb-2">
+                        Save Mission
+                    </button>
+                    <button id="export-mission" class="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-md mb-2">
+                        Export to Pixhawk
+                    </button>
+                    <button id="simulate-mission" class="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-md">
+                        Simulate Mission
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="flex-1 flex flex-col overflow-hidden">
+                <!-- Map Container -->
+                <div id="map" class="flex-1"></div>
+
+                <!-- Mission Details and Console -->
+                <div class="bg-white border-t border-gray-200 p-4 h-60 overflow-y-auto" id="console">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-lg font-semibold">Mission Details & Console</h2>
+                        <button id="clear-console" class="text-gray-500 hover:text-gray-700">
+                            Clear Console
+                        </button>
+                    </div>
+                    <div id="console-output" class="font-mono text-sm space-y-1">
+                        <!-- Console output will appear here -->
+                        <div class="text-gray-400">System initialized. Ready to plan missions.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Waypoint Editor Modal -->
+            <div id="waypoint-editor-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white rounded-lg p-6 w-96">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Edit Waypoint</h3>
+                        <button id="close-waypoint-editor" class="text-gray-500 hover:text-gray-700">
+                            &times;
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Latitude</label>
+                            <input type="number" id="waypoint-lat" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" step="0.000001">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Longitude</label>
+                            <input type="number" id="waypoint-lng" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" step="0.000001">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Altitude (m)</label>
+                            <input type="number" id="waypoint-alt" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" min="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Speed (m/s)</label>
+                            <input type="number" id="waypoint-speed" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" min="0" step="0.1">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Action</label>
+                            <select id="waypoint-action" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="waypoint">Waypoint</option>
+                                <option value="takeoff">Take Off</option>
+                                <option value="land">Land</option>
+                                <option value="photo">Take Photo</option>
+                                <option value="video-start">Start Video</option>
+                                <option value="video-stop">Stop Video</option>
+                                <option value="loiter">Loiter</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end space-x-2">
+                            <button id="cancel-waypoint-edit" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button id="save-waypoint-changes" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-md text-sm font-medium text-white">
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mission Planner Application
+        class PixhawkMissionPlanner {
+            constructor() {
+                this.map = null;
+                this.waypoints = [];
+                this.missions = [];
+                this.currentMission = null;
+                this.currentMissionId = null;
+                this.selectedWaypoint = null;
+                this.markers = [];
+                this.polyline = null;
+                this.connectionStatus = false;
+                this.simulationInterval = null;
+                this.simulationStep = 0;
+
+                this.initMap();
+                this.initEventListeners();
+                this.initMissionList();
+                this.addSampleData();
+                this.updateConsole('Mission Planner initialized successfully.');
+            }
+
+            initMap() {
+                // Initialize the map centered on a default location
+                this.map = L.map('map').setView([51.505, -0.09], 13);
+                
+                // Add OpenStreetMap tiles
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(this.map);
+
+                // Add click handler for adding waypoints
+                this.map.on('click', (e) => {
+                    if (this.currentMissionId) {
+                        const newWaypoint = this.addNewWaypoint(
+                            e.latlng.lat,
+                            e.latlng.lng,
+                            50, // default altitude
+                            5   // default speed
+                        );
+                        this.updateConsole(`Added new waypoint at (${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)})`);
+                    }
+                });
+            }
+
+            initEventListeners() {
+                // Connect to drone button
+                document.getElementById('connect-drone').addEventListener('click', () => {
+                    this.connectToDrone();
+                });
+
+                // Add waypoint button
+                document.getElementById('add-waypoint').addEventListener('click', () => {
+                    if (this.currentMissionId) {
+                        const center = this.map.getCenter();
+                        this.addNewWaypoint(
+                            center.lat,
+                            center.lng,
+                            50, // default altitude
+                            5   // default speed
+                        );
+                        this.updateConsole(`Added new waypoint at map center (${center.lat.toFixed(6)}, ${center.lng.toFixed(6)})`);
+                    } else {
+                        alert('Please select or create a mission first.');
+                    }
+                });
+
+                // New mission button
+                document.getElementById('new-mission').addEventListener('click', () => {
+                    this.createNewMission();
+                });
+
+                // Save mission button
+                document.getElementById('save-mission').addEventListener('click', () => {
+                    this.saveCurrentMission();
+                });
+
+                // Export mission button
+                document.getElementById('export-mission').addEventListener('click', () => {
+                    this.exportMission();
+                });
+
+                // Simulate mission button
+                document.getElementById('simulate-mission').addEventListener('click', () => {
+                    this.simulateMission();
+                });
+
+                // Clear console button
+                document.getElementById('clear-console').addEventListener('click', () => {
+                    this.clearConsole();
+                });
+
+                // Waypoint editor controls
+                document.getElementById('close-waypoint-editor').addEventListener('click', () => {
+                    document.getElementById('waypoint-editor-modal').classList.add('hidden');
+                });
+
+                document.getElementById('cancel-waypoint-edit').addEventListener('click', () => {
+                    document.getElementById('waypoint-editor-modal').classList.add('hidden');
+                });
+
+                document.getElementById('save-waypoint-changes').addEventListener('click', () => {
+                    this.saveWaypointChanges();
+                });
+            }
+
+            initMissionList() {
+                // Pre-populate with a default mission
+                this.createNewMission();
+            }
+
+            addSampleData() {
+                // Add sample waypoints for demonstration
+                if (this.currentMissionId) {
+                    setTimeout(() => {
+                        const bounds = this.map.getBounds();
+                        const center = bounds.getCenter();
+                        const ne = bounds.getNorthEast();
+                        
+                        const wp1 = this.addNewWaypoint(center.lat, center.lng, 30, 5);
+                        const wp2 = this.addNewWaypoint(center.lat + (ne.lat - center.lat)*0.3, center.lng + (ne.lng - center.lng)*0.3, 50, 5);
+                        const wp3 = this.addNewWaypoint(center.lat + (ne.lat - center.lat)*0.3, center.lng - (ne.lng - center.lng)*0.3, 70, 5);
+                        const wp4 = this.addNewWaypoint(center.lat - (ne.lat - center.lat)*0.3, center.lng - (ne.lng - center.lng)*0.3, 60, 5);
+                        const wp5 = this.addNewWaypoint(center.lat - (ne.lat - center.lat)*0.3, center.lng + (ne.lng - center.lng)*0.3, 40, 5);
+                        
+                        this.updateConsole('Added sample mission waypoints for demonstration');
+                        this.updateRouteLine();
+                    }, 500);
+                }
+            }
+
+            createNewMission() {
+                const missionId = Date.now().toString();
+                const missionName = `Mission ${this.missions.length + 1}`;
+                
+                const mission = {
+                    id: missionId,
+                    name: missionName,
+                    description: `New mission created on ${new Date().toLocaleString()}`,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    waypoints: []
+                };
+                
+                this.missions.push(mission);
+                this.currentMissionId = missionId;
+                this.currentMission = mission;
+                this.waypoints = [];
+                this.clearMarkers();
+                this.clearRouteLine();
+                
+                // Update mission list UI
+                this.renderMissionList();
+                
+                // Select the new mission in the list
+                this.selectMission(missionId);
+                
+                this.updateConsole(`Created new mission: ${missionName}`);
+            }
+
+            renderMissionList() {
+                const missionListElement = document.getElementById('mission-list');
+                missionListElement.innerHTML = '';
+                
+                this.missions.forEach(mission => {
+                    const missionElement = document.createElement('div');
+                    missionElement.className = `mission-item p-2 rounded-md cursor-pointer ${this.currentMissionId === mission.id ? 'bg-blue-100' : 'hover:bg-gray-100'}`;
+                    missionElement.dataset.missionId = mission.id;
+                    
+                    missionElement.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <div class="font-medium">${mission.name}</div>
+                            <div class="text-xs text-gray-500">${mission.waypoints.length} WPs</div>
+                        </div>
+                        <div class="text-xs text-gray-500 truncate">${new Date(mission.createdAt).toLocaleDateString()}</div>
+                    `;
+                    
+                    missionElement.addEventListener('click', () => this.selectMission(mission.id));
+                    
+                    missionListElement.appendChild(missionElement);
+                });
+            }
+
+            selectMission(missionId) {
+                this.currentMissionId = missionId;
+                this.currentMission = this.missions.find(m => m.id === missionId);
+                this.waypoints = [...this.currentMission.waypoints];
+                
+                // Update UI
+                this.renderMissionList();
+                this.renderWaypointList();
+                this.renderWaypointsOnMap();
+                this.updateRouteLine();
+                
+                this.updateConsole(`Selected mission: ${this.currentMission.name}`);
+            }
+
+            renderWaypointList() {
+                const waypointListElement = document.getElementById('waypoint-list');
+                waypointListElement.innerHTML = '';
+                
+                this.waypoints.forEach((waypoint, index) => {
+                    const waypointElement = document.createElement('div');
+                    waypointElement.className = `waypoint-item p-2 border border-gray-200 rounded-md ${this.selectedWaypoint === waypoint.id ? 'bg-blue-100' : ''}`;
+                    waypointElement.dataset.waypointId = waypoint.id;
+                    waypointElement.draggable = true;
+                    
+                    waypointElement.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <span class="font-bold mr-2">${index + 1}</span>
+                                <span class="text-sm">${this.getActionName(waypoint.action)}</span>
+                            </div>
+                            <div class="flex space-x-1">
+                                <button class="edit-waypoint text-blue-500 hover:text-blue-700 text-sm">Edit</button>
+                                <button class="delete-waypoint text-red-500 hover:text-red-700 text-sm">Delete</button>
+                            </div>
+                        </div>
+                        <div class="text-xs mt-1">
+                            Lat: ${waypoint.lat.toFixed(6)}, Lng: ${waypoint.lng.toFixed(6)}<br>
+                            Alt: ${waypoint.alt}m, Speed: ${waypoint.speed}m/s
+                        </div>
+                    `;
+                    
+                    // Add drag handlers for reordering
+                    waypointElement.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.setData('text/plain', waypoint.id);
+                        waypointElement.classList.add('opacity-50');
+                    });
+                    
+                    waypointElement.addEventListener('dragend', () => {
+                        waypointElement.classList.remove('opacity-50');
+                    });
+                    
+                    waypointElement.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        waypointElement.classList.add('border-blue-500');
+                    });
+                    
+                    waypointElement.addEventListener('dragleave', () => {
+                        waypointElement.classList.remove('border-blue-500');
+                    });
+                    
+                    waypointElement.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        waypointElement.classList.remove('border-blue-500');
+                        
+                        const sourceId = e.dataTransfer.getData('text/plain');
+                        this.reorderWaypoints(sourceId, waypoint.id);
+                    });
+                    
+                    // Add edit and delete handlers
+                    const editBtn = waypointElement.querySelector('.edit-waypoint');
+                    editBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.editWaypoint(waypoint.id);
+                    });
+                    
+                    const deleteBtn = waypointElement.querySelector('.delete-waypoint');
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.deleteWaypoint(waypoint.id);
+                    });
+                    
+                    waypointElement.addEventListener('click', () => {
+                        this.selectedWaypoint = waypoint.id;
+                        this.focusWaypointOnMap(waypoint.id);
+                        this.renderWaypointList();
+                    });
+                    
+                    waypointListElement.appendChild(waypointElement);
+                });
+            }
+
+            getActionName(action) {
+                const actionNames = {
+                    'waypoint': 'Waypoint',
+                    'takeoff': 'Take Off',
+                    'land': 'Land',
+                    'photo': 'Take Photo',
+                    'video-start': 'Start Video',
+                    'video-stop': 'Stop Video',
+                    'loiter': 'Loiter'
+                };
+                return actionNames[action] || action;
+            }
+
+            addNewWaypoint(lat, lng, alt = 50, speed = 5, action = 'waypoint') {
+                if (!this.currentMissionId) {
+                    alert('Please select or create a mission first.');
+                    return;
+                }
+                
+                const waypointId = Date.now().toString();
+                const newWaypoint = {
+                    id: waypointId,
+                    lat: lat,
+                    lng: lng,
+                    alt: alt,
+                    speed: speed,
+                    action: action,
+                    createdAt: new Date()
+                };
+                
+                this.waypoints.push(newWaypoint);
+                this.currentMission.waypoints = [...this.waypoints];
+                this.currentMission.updatedAt = new Date();
+                
+                // Update UI
+                this.renderWaypointList();
+                this.renderWaypointsOnMap();
+                this.updateRouteLine();
+                
+                return newWaypoint;
+            }
+
+            renderWaypointsOnMap() {
+                this.clearMarkers();
+                
+                this.waypoints.forEach((waypoint, index) => {
+                    const markerIcon = this.getMarkerIconForAction(waypoint.action);
+                    
+                    const marker = L.marker([waypoint.lat, waypoint.lng], {
+                        icon: markerIcon,
+                        draggable: true
+                    }).addTo(this.map);
+                    
+                    marker.bindPopup(`
+                        <div class="text-sm">
+                            <div class="font-bold mb-1">Waypoint ${index + 1}</div>
+                            <div>Lat: ${waypoint.lat.toFixed(6)}</div>
+                            <div>Lng: ${waypoint.lng.toFixed(6)}</div>
+                            <div>Alt: ${waypoint.alt}m</div>
+                            <div>Speed: ${waypoint.speed}m/s</div>
+                            <div>Action: ${this.getActionName(waypoint.action)}</div>
+                        </div>
+                    `);
+                    
+                    marker.on('dragend', (e) => {
+                        const newLat = e.target.getLatLng().lat;
+                        const newLng = e.target.getLatLng().lng;
+                        
+                        const waypointIndex = this.waypoints.findIndex(wp => wp.id === waypoint.id);
+                        if (waypointIndex !== -1) {
+                            this.waypoints[waypointIndex].lat = newLat;
+                            this.waypoints[waypointIndex].lng = newLng;
+                            this.currentMission.waypoints = [...this.waypoints];
+                            this.updateRouteLine();
+                            this.updateConsole(`Waypoint ${index + 1} moved to (${newLat.toFixed(6)}, ${newLng.toFixed(6)})`);
+                        }
+                    });
+                    
+                    marker.on('click', () => {
+                        this.selectedWaypoint = waypoint.id;
+                        this.renderWaypointList();
+                    });
+                    
+                    this.markers.push(marker);
+                });
+                
+                // Fit map to bounds if there are waypoints
+                if (this.waypoints.length > 0) {
+                    const bounds = this.getWaypointsBounds();
+                    this.map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            }
+
+            getMarkerIconForAction(action) {
+                const colors = {
+                    'waypoint': 'blue',
+                    'takeoff': 'green',
+                    'land': 'red',
+                    'photo': 'orange',
+                    'video-start': 'purple',
+                    'video-stop': 'darkpurple',
+                    'loiter': 'darkblue'
+                };
+                
+                const color = colors[action] || 'blue';
+                
+                return L.divIcon({
+                    className: `marker-icon marker-icon-${color}`,
+                    html: `<div class="marker-content" style="background-color: ${color}; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">${action === 'takeoff' ? 'T' : action === 'land' ? 'L' : 'W'}</div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+            }
+
+            clearMarkers() {
+                this.markers.forEach(marker => {
+                    this.map.removeLayer(marker);
+                });
+                this.markers = [];
+            }
+
+            updateRouteLine() {
+                if (this.polyline) {
+                    this.map.removeLayer(this.polyline);
+                }
+                
+                if (this.waypoints.length >= 2) {
+                    const points = this.waypoints.map(wp => [wp.lat, wp.lng]);
+                    this.polyline = L.polyline(points, { color: 'blue', weight: 3 }).addTo(this.map);
+                }
+            }
+
+            clearRouteLine() {
+                if (this.polyline) {
+                    this.map.removeLayer(this.polyline);
+                    this.polyline = null;
+                }
+            }
+
+            getWaypointsBounds() {
+                const latlngs = this.waypoints.map(wp => L.latLng(wp.lat, wp.lng));
+                return L.latLngBounds(latlngs);
+            }
+
+            editWaypoint(waypointId) {
+                const waypoint = this.waypoints.find(wp => wp.id === waypointId);
+                if (!waypoint) return;
+                
+                // Fill the editor form
+                document.getElementById('waypoint-lat').value = waypoint.lat;
+                document.getElementById('waypoint-lng').value = waypoint.lng;
+                document.getElementById('waypoint-alt').value = waypoint.alt;
+                document.getElementById('waypoint-speed').value = waypoint.speed;
+                document.getElementById('waypoint-action').value = waypoint.action;
+                
+                // Show the modal
+                document.getElementById('waypoint-editor-modal').classList.remove('hidden');
+                
+                // Store the waypoint ID being edited
+                document.getElementById('waypoint-editor-modal').dataset.waypointId = waypointId;
+            }
+
+            saveWaypointChanges() {
+                const waypointId = document.getElementById('waypoint-editor-modal').dataset.waypointId;
+                const waypointIndex = this.waypoints.findIndex(wp => wp.id === waypointId);
+                
+                if (waypointIndex === -1) return;
+                
+                this.waypoints[waypointIndex] = {
+                    ...this.waypoints[waypointIndex],
+                    lat: parseFloat(document.getElementById('waypoint-lat').value),
+                    lng: parseFloat(document.getElementById('waypoint-lng').value),
+                    alt: parseFloat(document.getElementById('waypoint-alt').value),
+                    speed: parseFloat(document.getElementById('waypoint-speed').value),
+                    action: document.getElementById('waypoint-action').value,
+                    updatedAt: new Date()
+                };
+                
+                this.currentMission.waypoints = [...this.waypoints];
+                this.currentMission.updatedAt = new Date();
+                
+                // Update UI
+                document.getElementById('waypoint-editor-modal').classList.add('hidden');
+                this.renderWaypointList();
+                this.renderWaypointsOnMap();
+                this.updateRouteLine();
+                
+                this.updateConsole(`Waypoint ${waypointIndex + 1} updated`);
+            }
+
+            deleteWaypoint(waypointId) {
+                if (confirm('Are you sure you want to delete this waypoint?')) {
+                    const waypointIndex = this.waypoints.findIndex(wp => wp.id === waypointId);
+                    
+                    if (waypointIndex !== -1) {
+                        this.waypoints.splice(waypointIndex, 1);
+                        this.currentMission.waypoints = [...this.waypoints];
+                        this.currentMission.updatedAt = new Date();
+                        
+                        // Update UI
+                        this.renderWaypointList();
+                        this.renderWaypointsOnMap();
+                        this.updateRouteLine();
+                        
+                        this.updateConsole(`Waypoint ${waypointIndex + 1} deleted`);
+                    }
+                }
+            }
+
+            reorderWaypoints(sourceId, targetId) {
+                const sourceIndex = this.waypoints.findIndex(wp => wp.id === sourceId);
+                const targetIndex = this.waypoints.findIndex(wp => wp.id === targetId);
+                
+                if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) return;
+                
+                const [movedItem] = this.waypoints.splice(sourceIndex, 1);
+                this.waypoints.splice(targetIndex, 0, movedItem);
+                this.currentMission.waypoints = [...this.waypoints];
+                this.currentMission.updatedAt = new Date();
+                
+                // Update UI
+                this.renderWaypointList();
+                this.renderWaypointsOnMap();
+                this.updateRouteLine();
+                
+                this.updateConsole(`Reordered waypoints`);
+            }
+
+            focusWaypointOnMap(waypointId) {
+                const waypoint = this.waypoints.find(wp => wp.id === waypointId);
+                if (waypoint) {
+                    this.map.panTo([waypoint.lat, waypoint.lng]);
+                    
+                    // Highlight the marker
+                    const marker = this.markers.find(m => {
+                        const latLng = m.getLatLng();
+                        return latLng.lat === waypoint.lat && latLng.lng === waypoint.lng;
+                    });
+                    
+                    if (marker) {
+                        marker.openPopup();
+                    }
+                }
+            }
+
+            saveCurrentMission() {
+                if (!this.currentMissionId) {
+                    alert('No mission selected to save.');
+                    return;
+                }
+                
+                this.currentMission.updatedAt = new Date();
+                
+                // In a real app, this would save to a database
+                // Here we just update the UI
+                this.renderMissionList();
+                this.updateConsole(`Mission "${this.currentMission.name}" saved successfully.`);
+            }
+
+            exportMission() {
+                if (!this.currentMissionId || this.waypoints.length === 0) {
+                    alert('No mission or waypoints to export.');
+                    return;
+                }
+                
+                // Format the mission data for Pixhawk
+                const missionData = {
+                    mission: this.currentMission.name,
+                    waypoints: this.waypoints.map((wp, index) => ({
+                        seq: index,
+                        frame: this.getMAVLinkFrame(wp.action),
+                        command: this.getMAVLinkCommand(wp.action),
+                        param1: 0, // depends on action
+                        param2: 0, // depends on action
+                        param3: 0, // depends on action
+                        param4: 0, // depends on action
+                        x: wp.lat,
+                        y: wp.lng,
+                        z: wp.alt,
+                        autocontinue: 1
+                    }))
+                };
+                
+                // Convert to MAVLink format (simplified for this demo)
+                const mavlinkMission = `QGC WPL 110\n`;
+                
+                const waypointsFile = missionData.waypoints.map(wp => {
+                    return `${wp.seq}\t${wp.frame}\t${wp.command}\t${wp.param1}\t${wp.param2}\t${wp.param3}\t${wp.param4}\t${wp.x}\t${wp.y}\t${wp.z}\t${wp.autocontinue}`;
+                }).join('\n');
+                
+                const fullFile = mavlinkMission + waypointsFile;
+                
+                // In a real app, this would be sent to the drone
+                // For demo purposes, we'll show it in the console
+                this.updateConsole(`Mission exported to Pixhawk format (simplified):`);
+                this.updateConsole(`MAVLink Mission File:\n${fullFile}`);
+                
+                // Simulate successful export
+                if (this.connectionStatus) {
+                    setTimeout(() => {
+                        this.updateConsole('Mission successfully uploaded to drone');
+                    }, 1000);
+                }
+            }
+
+            getMAVLinkFrame(action) {
+                // Simplified frame assignments
+                return 3; // MAV_FRAME_GLOBAL_RELATIVE_ALT
+            }
+
+            getMAVLinkCommand(action) {
+                // Simplified command assignments
+                const commands = {
+                    'waypoint': 16, // MAV_CMD_NAV_WAYPOINT
+                    'takeoff': 22,  // MAV_CMD_NAV_TAKEOFF
+                    'land': 21,     // MAV_CMD_NAV_LAND
+                    'photo': 2000,  // MAV_CMD_DO_DIGICAM_CONTROL
+                    'video-start': 2500, // MAV_CMD_VIDEO_START_CAPTURE
+                    'video-stop': 2501,  // MAV_CMD_VIDEO_STOP_CAPTURE
+                    'loiter': 19    // MAV_CMD_NAV_LOITER_TIME
+                };
+                
+                return commands[action] || 16; // Default to waypoint
+            }
+
+            simulateMission() {
+                if (!this.currentMissionId || this.waypoints.length === 0) {
+                    alert('No mission or waypoints to simulate.');
+                    return;
+                }
+                
+                if (this.simulationInterval) {
+                    clearInterval(this.simulationInterval);
+                    this.simulationInterval = null;
+                    return;
+                }
+                
+                this.updateConsole(`Starting mission simulation...`);
+                
+                // Clear any existing simulation drone
+                if (this.simulationDrone) {
+                    this.map.removeLayer(this.simulationDrone);
+                }
+                
+                // Create a drone marker
+                const firstWaypoint = this.waypoints[0];
+                this.simulationDrone = L.marker([firstWaypoint.lat, firstWaypoint.lng], {
+                    icon: L.divIcon({
+                        className: 'drone-icon',
+                        html: '<div style="width: 20px; height: 20px; background-color: red; border-radius: 50%;"></div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(this.map);
+                
+                this.simulationStep = 0;
+                
+                // Start simulation loop
+                this.simulationInterval = setInterval(() => {
+                    if (this.simulationStep >= this.waypoints.length) {
+                        clearInterval(this.simulationInterval);
+                        this.simulationInterval = null;
+                        this.updateConsole('Mission simulation complete!');
+                        return;
+                    }
+                    
+                    const currentWaypoint = this.waypoints[this.simulationStep];
+                    this.simulationDrone.setLatLng([currentWaypoint.lat, currentWaypoint.lng]);
+                    
+                    this.updateConsole(`Simulation: Executing waypoint ${this.simulationStep + 1} - ${this.getActionName(currentWaypoint.action)}`);
+                    
+                    this.simulationStep++;
+                }, 2000);
+            }
+
+            connectToDrone() {
+                if (this.connectionStatus) {
+                    this.disconnectFromDrone();
+                    return;
+                }
+                
+                this.updateConsole('Attempting to connect to drone...');
+                document.getElementById('connection-status').classList.remove('hidden');
+                document.getElementById('status-indicator').className = 'h-3 w-3 rounded-full bg-yellow-500 mr-2';
+                document.getElementById('status-text').textContent = 'Connecting...';
+                
+                // Simulate connection process
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += 10;
+                    if (progress > 100) progress = 100;
+                    
+                    document.querySelector('.progress-bar').style.width = `${progress}%`;
+                    
+                    if (progress === 100) {
+                        clearInterval(progressInterval);
+                        this.connectionStatus = true;
+                        document.getElementById('status-indicator').className = 'h-3 w-3 rounded-full bg-green-500 mr-2';
+                        document.getElementById('status-text').textContent = 'Connected';
+                        document.getElementById('connect-drone').textContent = 'Disconnect';
+                        this.updateConsole('Successfully connected to drone!');
+                    }
+                }, 300);
+            }
+
+            disconnectFromDrone() {
+                this.connectionStatus = false;
+                document.getElementById('status-indicator').className = 'h-3 w-3 rounded-full bg-red-500 mr-2';
+                document.getElementById('status-text').textContent = 'Disconnected';
+                document.getElementById('connect-drone').textContent = 'Connect to Drone';
+                document.querySelector('.progress-bar').style.width = '0%';
+                this.updateConsole('Disconnected from drone');
+            }
+
+            updateConsole(message) {
+                const consoleElement = document.getElementById('console-output');
+                const timestamp = new Date().toLocaleTimeString();
+                const messageElement = document.createElement('div');
+                messageElement.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> ${message}`;
+                consoleElement.appendChild(messageElement);
+                consoleElement.scrollTop = consoleElement.scrollHeight;
+            }
+
+            clearConsole() {
+                document.getElementById('console-output').innerHTML = '<div class="text-gray-400">Console cleared</div>';
+            }
+        }
+
+        // Initialize the application when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const missionPlanner = new PixhawkMissionPlanner();
+            
+            // Make the mission planner globally available for debugging
+            window.missionPlanner = missionPlanner;
+        });
+    </script>
+</body>
+</html>
